@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -12,46 +11,55 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
-
-var broadcastAddress = flag.String("broadcast_addr",
-	"224.0.2.60", "address to broadcast to (generally leave default)")
-var broadcastPort = flag.Uint("broadcast_port",
-	4445, "port to broadcast to (generally leave default)")
-var motd = flag.String("motd", "Hello Steve!", "MOTD to advertise")
-var port = flag.Uint("port", 25565, "listening port of minecraft server")
-var address = flag.String(
-	"addr",
-	"",
-	"listening address of minecraft server (only needed for version < 1.6)",
-)
-var logTS = flag.Bool("log_ts", true, "include timestamp in log messages")
-var verbose = flag.Bool("v", false, "verbose logging")
 
 func init() {
-	flag.Parse()
+	pflag.String("broadcast_addr", "224.0.2.60",
+		"address to broadcast to (generally leave default)")
+	pflag.Uint("broadcast_port", 4445,
+		"port to broadcast to (generally leave default)")
+	pflag.StringP("motd", "m", "Hello Steve!", "MOTD to advertise")
+	pflag.UintP("port", "p", 25565, "listening port of minecraft server")
+	pflag.StringP("addr", "a", "",
+		"listening address of minecraft server (only needed for version < 1.6)")
+	pflag.BoolP("log_ts", "l", true, "include timestamp in log messages")
+	pflag.UintP("verbose", "v", 0, "verbose logging")
 
-	*broadcastAddress += ":" + strconv.FormatUint(uint64(*broadcastPort), 10)
-	*address += ":" + strconv.FormatUint(uint64(*port), 10)
+	pflag.Parse()
 
-	if *logTS {
+	viper.SetEnvPrefix("MCLB")
+	viper.AutomaticEnv()
+	viper.BindPFlags(pflag.CommandLine)
+
+	if viper.GetBool("log_ts") {
 		log.SetFlags(log.Lmicroseconds | log.Lshortfile | log.LUTC)
 	} else {
 		log.SetFlags(log.Lshortfile)
 	}
 }
 
-func main() {
-	log.Printf("broadcasting MOTD %q and address %q to %q",
-		*motd, *address, *broadcastAddress)
+func combineAddressPort(addr string, port uint) string {
+	return addr + ":" + strconv.FormatUint(uint64(port), 10)
+}
 
-	conn, err := net.DialTimeout("udp", *broadcastAddress, 15*time.Second)
+func main() {
+	motd := viper.GetString("motd")
+	addr := combineAddressPort(viper.GetString("addr"), viper.GetUint("port"))
+	broadcastAddr := combineAddressPort(
+		viper.GetString("broadcast_addr"), viper.GetUint("broadcast_port"))
+
+	log.Printf("broadcasting MOTD %q and address %q to %q",
+		motd, addr, broadcastAddr)
+
+	conn, err := net.DialTimeout("udp", broadcastAddr, 15*time.Second)
 	if err != nil {
-		log.Fatalf("unable to connect to %q: %s", *broadcastAddress, err)
+		log.Fatalf("unable to connect to %q: %s", broadcastAddr, err)
 	}
 	defer conn.Close()
 
-	msg := []byte(fmt.Sprintf("[MOTD]%s[\\MOTD][AD]%s[\\AD]", *motd, *address))
+	msg := []byte(fmt.Sprintf("[MOTD]%s[\\MOTD][AD]%s[\\AD]", motd, addr))
 
 	broadcastDone := make(chan struct{})
 	sigs := make(chan os.Signal)
@@ -67,7 +75,7 @@ func main() {
 	go func() {
 		var err error
 		for c := range ticker.C {
-			if *verbose {
+			if viper.GetUint("verbose") > 0 {
 				log.Printf("c: %s\n", c)
 			}
 			_, err = conn.Write(msg)
@@ -75,13 +83,14 @@ func main() {
 				log.Printf("unable to broadcast msg: %s", err)
 				continue
 			}
-			if *verbose {
+			if viper.GetUint("verbose") > 0 {
 				log.Println("success; resetting backoff")
 			}
 			backOff.Reset()
 		}
 		if err != nil {
-			log.Fatalf("failed to broadcast msg within %s; exiting", backOff.MaxElapsedTime)
+			log.Fatalf("failed to broadcast msg within %s; exiting",
+				backOff.MaxElapsedTime)
 		}
 		close(broadcastDone)
 	}()
