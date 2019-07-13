@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-minecraft_lan_broadcaster
+minecraft_lan_broadcast
 
 # Test binary, build with `go test -c`
 *.test
