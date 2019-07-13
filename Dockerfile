@@ -15,4 +15,5 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflag
 
 FROM scratch
 COPY --from=builder /build/minecraft_lan_broadcaster /
+ENV MCLB_LOG_TS=0
 ENTRYPOINT ["/minecraft_lan_broadcaster"]
