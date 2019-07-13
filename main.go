@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+const broadcastTemplate = "[MOTD]%s[/MOTD][AD]%s[/AD]"
+
 func init() {
 	pflag.String("broadcast_addr", "224.0.2.60",
 		"address to broadcast to (generally leave default)")
@@ -59,7 +61,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	msg := []byte(fmt.Sprintf("[MOTD]%s[\\MOTD][AD]%s[\\AD]", motd, addr))
+	msg := []byte(fmt.Sprintf(broadcastTemplate, motd, addr))
 
 	broadcastDone := make(chan struct{})
 	sigs := make(chan os.Signal)
