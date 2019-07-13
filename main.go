@@ -48,7 +48,12 @@ func combineAddressPort(addr string, port uint) string {
 
 func main() {
 	motd := viper.GetString("motd")
-	addr := combineAddressPort(viper.GetString("addr"), viper.GetUint("port"))
+	var addr string
+	if viper.IsSet("addr") {
+		addr = combineAddressPort(viper.GetString("addr"), viper.GetUint("port"))
+	} else {
+		addr = strconv.ParseUint(uint64(viper.GetUint("port")), 10)
+	}
 	broadcastAddr := combineAddressPort(
 		viper.GetString("broadcast_addr"), viper.GetUint("broadcast_port"))
 
